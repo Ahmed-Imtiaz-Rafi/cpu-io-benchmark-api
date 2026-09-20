@@ -1,0 +1,10 @@
+spring.application.name=cpu-io-benchmark-api
+
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.open-in-view=false
+
+spring.datasource.username=your_mysql_username
+spring.datasource.password=your_mysql_password
+spring.datasource.url=jdbc:mysql://localhost:3306/cpu_io_benchmark_db
