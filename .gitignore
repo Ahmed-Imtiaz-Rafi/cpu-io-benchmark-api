@@ -42,3 +42,5 @@ jmeter.log
 
 #Results folder
 /results/
+
+/artifacts/
