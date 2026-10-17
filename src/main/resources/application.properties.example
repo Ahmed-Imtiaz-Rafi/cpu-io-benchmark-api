@@ -8,3 +8,5 @@ spring.jpa.open-in-view=false
 spring.datasource.username=your_mysql_username
 spring.datasource.password=your_mysql_password
 spring.datasource.url=jdbc:mysql://localhost:3306/cpu_io_benchmark_db
+
+app.seed.enabled=false
