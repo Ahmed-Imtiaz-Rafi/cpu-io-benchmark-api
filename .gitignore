@@ -11,7 +11,7 @@ target/
 *.ipr
 out/
 
-# Eclipse (in case anyone on the team uses it)
+# Eclipse
 .apt_generated
 .classpath
 .factorypath
@@ -28,10 +28,17 @@ bin/
 .DS_Store
 Thumbs.db
 
-# Application properties (contains your real DB password)
+# Application properties
 application.properties
 application-*.properties
 !application.properties.example
 
 # Logs
 *.log
+
+#Jmeter logs
+*.jtl
+jmeter.log
+
+#Results folder
+/results/
