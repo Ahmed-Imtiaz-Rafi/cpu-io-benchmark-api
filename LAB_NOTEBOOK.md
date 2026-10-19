@@ -59,3 +59,19 @@
 * **Config pass:** complete except the three items under "Not yet checked" in the Config Pass entry, which belong to the pilot.
 * **Still provisional:** the 30 s trim, the quiet-machine gate, the 120 s run length and the 60 s cooldown.
 * **Not yet tagged:** `plan-v1`.
+
+### 2026-10-19: JMeter Plans and Resource Monitor
+* **Plans:** `jmeter/login.jmx`, `jmeter/orders.jmx`, `jmeter/mixed.jmx` (commit `f02b5f5`). All parameterized: `threads`, `rampup` (default 10), `duration` (default 120), infinite loop with thread lifetime. 127.0.0.1:8080, KeepAlive on, 30 s connect and response timeouts, no listeners (results via `-l`). Old `login-baseline.jmx` removed.
+* **Labels (same in every plan, used by the analysis):** `POST login`, `GET orders`.
+* **Assertions:** `POST login` = response code equals `${expected}` with Ignore Status ticked. `GET orders` = response code 200 and JSON `$.length()` equals 40, so an empty list fails.
+* **Mixed plan:** Throughput Controllers in Percent Executions mode, 6.25% login and 93.75% orders (1:15), Per User off. Ratio is by request count, not CPU time.
+* **Checks (pilot, not counted):**
+  * `orders`, 1 thread, 30 s: 3,519 samples, 0 errors, avg 8 ms (max 253 ms, the cold first request).
+  * `orders` with `/users/9999/orders`: 3,758 samples, 100% errors, so the assertion rejects an empty list. Broken version not saved.
+  * `mixed`, 10 threads, 30 s: 17,059 samples, 0 errors, avg 14 ms. 15,993 `GET orders` to 1,066 `POST login` = 15.0 : 1.
+* **Mistakes fixed:** `${user_id}` unresolved because the CSV Data Set Config was missing in the mixed plan | run stopped after 1 sample until Thread Group loop settings were corrected | label `Post login` renamed to `POST login` | a failed run had appended a multi-line error into a `.jtl`, so the file was deleted (JMeter appends to an existing `-l` file, so the driver must use fresh filenames).
+* **Monitor:** `scripts/monitor.py` (commit `0bef2b6`), Python 3.12.10, psutil 7.2.2. One row per second: epoch ms, system CPU, memory %, then CPU and RSS for api, mysql, jmeter. Processes found by listening port (8080, 3306) and by command line (`ApacheJMeter` with ` -n `, so the GUI is not picked). Per-process CPU is a percentage of one core. Idle system CPU measured at about 1 to 2%.
+* **MySQL processes:** two `mysqld.exe`. PID on port 3306 is the server (347 s CPU, 95 MB). The other is an idle wrapper (0.016 s CPU, 12 MB), ignored.
+* **Operational rules:** JMeter GUI must be closed during runs | monitor must find the non-GUI JMeter, which starts after it, so it keeps searching until found.
+* **Observation (to confirm in the pilot):** in the 10-user mixed run, mysqld used about 690% CPU against the API's 310%. `/orders` may behave as CPU work inside MySQL (unindexed scan on the same CPU), not as waiting on I/O. Candidate limitation line and a point for the write-up.
+* **Next:** intervention build (8-thread executor, `@Async` on `/login`) | driver and schedule generator | analysis script | pilot, then amendment, then `plan-v1`.
