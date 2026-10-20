@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.concurrent.CompletableFuture;
+
 @RestController
 public class AuthController {
     private final AuthService authService;
@@ -17,10 +19,9 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody LoginRequest loginRequest) {
-        if(authService.login(loginRequest)) {
-            return ResponseEntity.ok("User logged in successfully");
-        }
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials");
+    public CompletableFuture<ResponseEntity<String>> login(@RequestBody LoginRequest loginRequest) {
+        return authService.login(loginRequest).thenApply(ok -> ok
+                ? ResponseEntity.ok("User logged in successfully")
+                : ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials"));
     }
 }

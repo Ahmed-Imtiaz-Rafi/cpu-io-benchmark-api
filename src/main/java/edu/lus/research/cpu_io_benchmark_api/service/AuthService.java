@@ -3,8 +3,11 @@ package edu.lus.research.cpu_io_benchmark_api.service;
 import edu.lus.research.cpu_io_benchmark_api.DTO.LoginRequest;
 import edu.lus.research.cpu_io_benchmark_api.models.User;
 import edu.lus.research.cpu_io_benchmark_api.repositories.UserRepository;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class AuthService {
@@ -16,13 +19,13 @@ public class AuthService {
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
     }
 
-    public boolean login(LoginRequest loginRequest) {
+    @Async("cpuBoundExecutor")
+    public CompletableFuture<Boolean> login(LoginRequest loginRequest) {
         User user = userRepository.findByUsername(loginRequest.username());
         if (user == null) {
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
-        return bCryptPasswordEncoder.matches(loginRequest.password(), user.getPasswordHash());
+        return CompletableFuture.completedFuture(
+                bCryptPasswordEncoder.matches(loginRequest.password(), user.getPasswordHash()));
     }
-
-
 }
