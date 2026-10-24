@@ -23,7 +23,7 @@ def port_free(port):
 def start_api(build, log_path):
     gc = os.path.join(os.path.dirname(log_path), "gc.log")
     cmd = [cfg["java"], f"-Xlog:gc:file={gc}:uptime,time", "-jar", cfg["jars"][build],
-           "--spring.config.additional-location=file:" + cfg["benchmark_properties"]]
+           "--spring.config.additional-location=file:" + cfg["benchmark_properties"]] + cfg.get("extra_args", [])
     log = open(log_path, "w")
     return subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
 
