@@ -140,7 +140,8 @@ def run_batch(batch_name, start_seq=1, end_seq=None, out_root="results/final"):
                     shutil.move(src, dst)
             if not status.startswith("fault"):
                 break
-        time.sleep(cfg["cooldown_s"])
+        if status != "skipped":
+            time.sleep(cfg["cooldown_s"])
     log.write(f"batch end {time.ctime()}\n")
 
 
