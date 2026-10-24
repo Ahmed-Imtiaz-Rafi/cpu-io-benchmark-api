@@ -45,3 +45,4 @@ jmeter.log
 
 /artifacts/
 __pycache__/
+analysis/
