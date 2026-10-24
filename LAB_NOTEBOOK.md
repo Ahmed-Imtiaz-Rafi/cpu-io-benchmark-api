@@ -1,12 +1,14 @@
 ### 2026-10-17: `/login` Plan Validation
+
 * **Setup:** JMeter 5.6.3 | 1 thread, 1,000 iter. | CSV SHA-256: `552af2311d76d5618fc563000a877ac0d15919a7a4232bef9160f5c5d1034837`
 * **Config:** Variable Names (empty), Ignore Status (ticked), Assertion: `${expected}`
 * **Result:** 1,000 samples, **0 errors**, ~58 ms avg.
-    * 50 wrong-password rows passed as expected `401`s. Throwaway test confirmed assertion triggers correctly.
+  * 50 wrong-password rows passed as expected `401`s. Throwaway test confirmed assertion triggers correctly.
 * **Fixes:** Cleared Variable Names (fixed header row sent as data); ticked Ignore Status (fixed wrong-passwords counted as errors).
 * **Next:** Decide run parameters, then scale concurrency.
 
 ### 2026-10-17: Pre-registered Analysis Plan
+
 * **Status:** Written before any counted data exists. Edits only via dated amendments. Pilot runs do not count toward the 7. Tag `plan-v1` once the amendment in "Provisional" is done.
 * **Fixed environment:** Single PC (Ryzen 5700X, 16 GB, Windows 11) | versions pinned in README | dataset checksums in README | BCrypt strength 10 | baseline code at tag `baseline-v1`
 * **Scenarios:** `login` alone, `orders` alone (control: `/orders` code is identical in both builds), `mixed` (fixed 1 login : 15 orders via Throughput Controller, no second ratio)
@@ -34,13 +36,15 @@
 | Below -10%, p >= 0.05   | No substantial impact detected             |
 | Below -10% and p < 0.05 | Positive impact (predicted as possible)    |
 
-    * Overall: H2 holds if none of 50, 100, 200 shows a negative impact. Reported as inconclusive if any level is inconclusive. Wording: "no substantial impact detected above 10%".
+* **H2 overall:** H2 holds if none of 50, 100, 200 shows a negative impact. Reported as inconclusive if any level is inconclusive. Wording: "no substantial impact detected above 10%".
 * **Bad-run rule:** A run is repeated only for a pre-listed fault: API fails to start or crashes, JMeter aborts, monitor fails, external interruption (restart, sleep, power loss, antivirus), failed quiet-machine gate, failed data-integrity check. Never repeated because a result looks odd (errors are data). No outlier removal. Excluded runs are logged here with the reason and files kept. A rerun keeps the same run number.
 * **Results:** `results/{pilot|final}/batch-NN_date/{scenario}_{build}_u{users}_rep{n}/` holding `.jtl`, `monitor.csv`, `api.log`, `meta.json`, `DONE`. Failed attempts in `failed/`. Manifest and checksums committed. Raw `results/` git-ignored. Batch zip copied to a second location.
 * **Provisional (fix by dated amendment after the pilot, before `plan-v1`):** 30 s trim | quiet-machine gate (starting value: system CPU under 5% for 10 s) | 120 s run length (may lengthen for p99) | 60 s cooldown
 * **Pending (not yet decided):** intervention packaging (two jars from tagged commits, or one jar with a switch) | config pass (`show-sql` off, `ddl-auto=validate`, Hikari pool size, Tomcat limits, GC logging flag, KeepAlive) | `/orders` and `mixed` plans | monitor script | driver script
 * **Next:** Config pass and builds, then pilot (trim check, idle CPU, login request counts in mixed, noise floor, driver dry run), then amendment, then tag `plan-v1`.
+
 ### 2026-10-18: Config Pass, JVM Setup and Baseline Freeze
+
 * **JVM:** Temurin `25.0.4.1+1` (`25.0.4.1+1-LTS`, OpenJDK 64-Bit Server VM), launched by full path (`$HOME/.jdks/temurin-25.0.4.1/bin/java`). `java` on the PATH is JDK 17, so it is never used for runs.
 * **JVM defaults (recorded, not changed):** G1 collector | max heap 4,276,092,928 B (~4 GB, 25% of RAM) | initial heap 268,435,456 B (256 MB) | G1 region 2 MB | 13 parallel / 3 concurrent GC threads | 16 logical processors. Small initial heap means the heap grows early in each run, covered by the fresh JVM per run and the 30 s trim.
 * **Benchmark config:** `config/benchmark.properties` (committed, `a4556f6db23ff6f94e4f48b5b3a311410bbafbbd6e04ccdc4e717833865731cb *config/benchmark.properties`), passed to both builds with `--spring.config.additional-location=file:config/benchmark.properties`. It holds `show-sql=false`, `open-in-view=false`, `ddl-auto=validate`, Hikari max 10 / min-idle 10, `server.tomcat.threads.max=200`, `app.seed.enabled=false`. The packaged `application.properties` now holds only app name, datasource URL and credentials.
@@ -53,7 +57,9 @@
 * **After the tag:** `application.properties.example` trimmed to credentials only. Documentation only, no runtime effect, jar unchanged, no new tag.
 * **Tagging rule:** a new tag only when Java code, `benchmark.properties`, `pom.xml` or the dataset changes.
 * **Next:** README fix (setup and Option B wording, JDK row, `config/`) | `/orders` and `mixed` plans | monitor script | intervention build (`artifacts/intervention.jar`) | driver, then pilot.
+
 ### 2026-10-18: Amendment to Pre-registered Analysis Plan
+
 * **Baseline reference changed:** the plan entry's "baseline code at tag `baseline-v1`" is superseded. The baseline is tag `baseline-v2`, commit `00c19ebcd8486ee81c9a5079680524ccf87c2307`, jar `artifacts/baseline.jar` (SHA-256 `c875668229e2c9419e607ccccac6edfc3736d506b9e9d4fbfb3d0263c8d26f08`). Reason: see the Config Pass entry (`baseline-v1` predates the `@Param` fix). No analysis choice is changed.
 * **Packaging decided:** two jars, each built once from its own tagged commit and copied to `artifacts/`. The intervention jar's hash is recorded before any counted run.
 * **Config pass:** complete except the three items under "Not yet checked" in the Config Pass entry, which belong to the pilot.
@@ -61,6 +67,7 @@
 * **Not yet tagged:** `plan-v1`.
 
 ### 2026-10-19: JMeter Plans and Resource Monitor
+
 * **Plans:** `jmeter/login.jmx`, `jmeter/orders.jmx`, `jmeter/mixed.jmx` (commit `f02b5f5`). All parameterized: `threads`, `rampup` (default 10), `duration` (default 120), infinite loop with thread lifetime. 127.0.0.1:8080, KeepAlive on, 30 s connect and response timeouts, no listeners (results via `-l`). Old `login-baseline.jmx` removed.
 * **Labels (same in every plan, used by the analysis):** `POST login`, `GET orders`.
 * **Assertions:** `POST login` = response code equals `${expected}` with Ignore Status ticked. `GET orders` = response code 200 and JSON `$.length()` equals 40, so an empty list fails.
@@ -75,3 +82,28 @@
 * **Operational rules:** JMeter GUI must be closed during runs | monitor must find the non-GUI JMeter, which starts after it, so it keeps searching until found.
 * **Observation (to confirm in the pilot):** in the 10-user mixed run, mysqld used about 690% CPU against the API's 310%. `/orders` may behave as CPU work inside MySQL (unindexed scan on the same CPU), not as waiting on I/O. Candidate limitation line and a point for the write-up.
 * **Next:** intervention build (8-thread executor, `@Async` on `/login`) | driver and schedule generator | analysis script | pilot, then amendment, then `plan-v1`.
+
+### 2026-10-24: Amendment to Pre-registered Analysis Plan (pilot complete)
+
+* **Status:** Pilot finished before any counted run. **No hypothesis, threshold, metric, test or verdict rule is changed.** Only the provisional values are fixed and open items closed. Pilot runs (`results/pilot/`, git-ignored) never count toward the 7.
+* **Baseline:** tag `baseline-v2`, jar `artifacts/baseline.jar`, SHA-256 `c875668229e2c9419e607ccccac6edfc3736d506b9e9d4fbfb3d0263c8d26f08` (see Config Pass entry; `baseline-v1` is not used).
+* **Intervention:** tag `intervention-v1`, commit `30a0166b68481b633c64915b0bbce42488872f35`, jar `artifacts/intervention.jar`, SHA-256 `c411d1a3211b8cb7d3144f667520e63bb392100e056aca073a0f7ece1b88cdff`. Diff against `baseline-v2` in `src/main/java`: new `AsyncConfiguration` (`cpuBoundExecutor`: 8 core, 8 max, queue 1000, `@EnableAsync`), `@Async("cpuBoundExecutor")` on `AuthService.login` (so the DB lookup and BCrypt both run on the executor), async `CompletableFuture` return in `AuthController`. Checked with `jcmd`: exactly 8 threads `cpu-1`..`cpu-8`, about equal CPU time each. Codes still 200/401.
+* **Fixed provisional values:**
+  * 30 s trim: confirmed. In 200-user mixed baseline runs p95 is high in the first 20 s (orders 404 to 628 ms) and flat from 20 s (about 292 ms).
+  * Quiet-machine gate: system CPU under 5% for 10 s. Idle machine reads about 1 to 2%, gate passed in every pilot run.
+  * Run length 120 s and cooldown 60 s: kept.
+* **Noise floor (mixed, 200 users, baseline, 6 pilot runs):** orders p95 326, 550, 310, 318, 301, 323 ms | login p95 370, 469, 370, 371, 356, 368 ms. Five clean runs: orders mean 316 ms (SD 10, about 3%), login mean 367 ms (SD 6, about 2%). So the 10% lines are above run-to-run noise. One run in six (rep2: orders +74%, login +28%) had an unexplained slowdown. GC ruled out (about 60 pauses and about 100 ms total per 10 s bucket, longest 42 ms, same in quiet and slow stretches). No outside process identified. Kept under the bad-run rule. A second slow run appeared in login-only intervention (rep2, 124/s vs 134/s). Monitor now logs the busiest non-target process each second.
+* **Hikari pool fixed at 10:** `/orders` alone, 200 users, baseline: pool 10 p95 285 ms (about 730/s) vs pool 50 p95 831 and 939 ms (about 853/s), slowest request 29.6 s at pool 50. 10 kept for all runs. Not tested: whether the intervention's effect depends on pool size.
+* **Verified under load:** 200 Tomcat request threads (`jcmd`), no SQL in the console, 0 errors in clean runs.
+* **Data bug found and fixed:** `login.jmx` read a Desktop copy of the CSV (not checksummed, presumed different) and produced about 0.1% assertion failures (e.g. `user0261` expected 401, CSV row says 200). Replay of `db/seeded-users.csv` against the API: 0 mismatches in 1,000. After the fix: 23,787 samples, 0 errors. All three plans now use the relative path `db/seeded-users.csv`. Earlier login-only pilot results on the wrong file are discarded. Do not open and resave plans in the GUI before a batch (it can write an absolute path); verify with `grep filename jmeter/*.jmx`.
+* **p99 eligibility, applying the rule:** login in `mixed` has about 3,900 requests per 90 s window, so p99 is "n/a (too few requests)". Orders in `mixed` (about 58,000) and login in `login` at saturation (about 17,000) are eligible. Levels 1 and 10 are expected to be n/a.
+* **Pilot first look (not counted, not used to change anything):**
+  * `mixed`, 200 users: `/orders` p95 226 to 231 ms vs 301 to 326 baseline (about -28%); `/login` p95 2,749 to 2,793 ms vs 356 to 371 (about +650%).
+  * `login`, 200 users: throughput about 134/s (intervention) vs about 198/s (baseline); p95 1,523 / 1,785 / 1,525 ms vs 1,630 ms (one clean baseline run).
+  * Pilot sample is far too small for any verdict. The real runs decide.
+* **Driver and tools (tested on pilot):** `scripts/driver.py` (quiet gate, port check, API start with readiness poll, monitor, JMeter, 3 attempts per run, failed attempts moved to `failed/`, resume by `DONE` file, no cooldown for skipped runs, `meta.json` with jar hash and Java version, per-run `gc.log`), `scripts/monitor.py`, `scripts/make_schedule.py` (210 runs, pair order flips, `scripts/schedule.csv`), `scripts/analyze_runs.py` and `scripts/verdicts.py` (per-level and combined H1a, H1b, H2 as pre-registered). Dry run through `run_batch`: 4 of 4 `ok` in schedule order, resume skipped all 4, port-busy fault retried 3 times and kept in `failed/`.
+* **Batches:** `run_batch('batch-NN_date', first, last)` into `results/final/`. Three batches: seq 1 to 70, 71 to 140, 141 to 210 (about 3.9 h each, builds alternate inside each). Both builds must exist before batch 1.
+* **Limitations to carry into the README and write-up:** `/orders` is not I/O-bound on this machine (mysqld uses about 970% CPU, API about 370%, unindexed scan on the same CPU) | pool size tested only at 10 and 50 | whole `login()` runs on the executor | one machine, 8 cores / 16 logical, CPU about 85 to 90% busy at 200 users | about 1 in 6 runs shows an unexplained slowdown | JMeter uses about 10 to 16% of one core at 200 users.
+* **Resolved from "Pending":** intervention packaging (two jars) | config pass | `/orders` and `mixed` plans | monitor | driver.
+* **Integrity check (manual, as pre-registered):** the driver does not run it. Before and after each batch, run `CHECKSUM TABLE users, products, orders` and record the values in the batch entry; a change is a data-integrity fault. MySQL is restarted by hand before each batch.
+* **Next:** commit this entry and tag `plan-v1` (hash recorded in the batch 1 entry), set power plan and pause Windows Update, then start batch 1 (seq 1 to 70).
