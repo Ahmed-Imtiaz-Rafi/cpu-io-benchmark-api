@@ -108,10 +108,8 @@
 * **Integrity check (manual, as pre-registered):** the driver does not run it. Before and after each batch, run `CHECKSUM TABLE users, products, orders` and record the values in the batch entry; a change is a data-integrity fault. MySQL is restarted by hand before each batch.
 * **Next:** commit this entry and tag `plan-v1` (hash recorded in the batch 1 entry), set power plan and pause Windows Update, then start batch 1 (seq 1 to 70).
 
-
-### 2026-10-25: Batch 1 (seq 1 to 70)
-
 ### 2026-10-25: Batch 1 (seq 1 to 70), login alone
+
 * **Plan:** tag `plan-v1`, commit `7230f6a28948da3290249eb3484f2d322ec0de43`. No changes since.
 * **Before:** MySQL restarted by hand. `CHECKSUM TABLE`: users `1701132287`, products `2759041946`, orders `2384344284`.
 * **Command:** `python -c "import sys; sys.path.insert(0,'scripts'); import driver; driver.run_batch('batch-01_2026-10-25', 1, 70)"`
@@ -122,8 +120,30 @@
 ### 2026-10-25: Batch 2 (seq 71 to 140), orders alone
 
 * **Plan:** tag `plan-v1`, commit `7230f6a28948da3290249eb3484f2d322ec0de43`. No changes since.
-* **Before:** TODO (MySQL restart and the three values). I did not record them in this conversation; if not saved, note "not recorded" and rely on the "after" values matching batch 1.
+* **Before:** not recorded (the checksums were not saved before this batch started). Covered by the "after" reading below, which matches batch 1.
 * **Command:** `python -c "import sys; sys.path.insert(0,'scripts'); import driver; driver.run_batch('batch-02_2026-10-25', 71, 140)"`
 * **After:** `CHECKSUM TABLE` (MySQL not restarted): users `1701132287`, products `2759041946`, orders `2384344284`. Identical to batch 1.
 * **Outcome:** 70 of 70 runs ok on the first attempt, no `failed/` folder, no retries. Ended 12:59 on 2026-10-25. Scenario: `orders`, all five levels, 7 runs per build.
 * **Data:** raw runs in `results/final/batch-02_2026-10-25/` (git-ignored). `analysis/runs.csv` is regenerated from them.
+
+### 2026-10-25: Batch 3 (seq 141 to 210), mixed
+
+* **Plan:** tag `plan-v1`, commit `7230f6a28948da3290249eb3484f2d322ec0de43`. No changes since.
+* **Before:** MySQL restarted by hand. `CHECKSUM TABLE`: users `1701132287`, products `2759041946`, orders `2384344284`.
+* **Command:** `python -c "import sys; sys.path.insert(0,'scripts'); import driver; driver.run_batch('batch-03_2026-10-25', 141, 210)"`
+* **After:** `CHECKSUM TABLE` (MySQL not restarted): users `1701132287`, products `2759041946`, orders `2384344284`. Identical to "before" and to batches 1 and 2.
+* **Final reading:** `CHECKSUM TABLE` taken again after the analysis: same three values. Unchanged.
+* **Outcome:** 70 of 70 runs ok on the first attempt, no `failed/` folder, no retries. Ended 17:10 on 2026-10-25. Scenario: `mixed` (1 login : 15 orders), all five levels, 7 runs per build.
+* **Data:** raw runs in `results/final/batch-03_2026-10-25/` (git-ignored). `analysis/runs.csv` is regenerated from all three batches.
+
+### 2026-10-25: Results of the pre-registered analysis (all 210 runs)
+
+* **Data:** 210 counted runs (3 batches × 70), 7 per condition, no failed attempts, no retries, no exclusions. Checksums of `users`, `products`, `orders` unchanged across all batches. 0 failed requests in all 280 analysis rows (each run's 90 s window), checked with `analysis/runs.csv`.
+* **Analysis:** `scripts/analyze_runs.py` and `scripts/verdicts.py`, run as pre-registered (p95 per run, two-sided Mann-Whitney U per level, thresholds 10% and p < 0.05). No rule changed after seeing data.
+* **H1a (login alone): not supported at the 10% threshold.** Login p95, baseline vs intervention, ms: 1 user 56 / 56 | 10 users 74 / 92 (+24.3%) | 50 users 383 / 393 (+2.6%, p 0.0405) | 100 users 551 / 864 (+56.8%, p 0.0021) | 200 users 1,062 / 1,725 (+62.4%, p 0.0021). The intervention was slower, not faster, where the CPU saturated.
+* **H1b (login in mixed): not supported at the 10% threshold.** Login p95: 1 user 60 / 61 | 10 users 83 / 83 | 50 users 143 / 143 | 100 users 218 / 556 (+155.0%, p 0.0021) | 200 users 366 / 2,869 (+683.9%, p 0.0021).
+* **H2 (orders in mixed): holds, no negative impact.** Orders p95: 1 user 8 / 8 | 10 users 17 / 17 | 50 users 76 / 76 | 100 users 152 / 132 (-13.2%, p 0.0020) | 200 users 302 / 135 (-55.3%, p 0.0020). Positive impact at 100 and 200 users, none at 50 or below. The script's wording ("no substantial impact detected") understates this, because the positive label requires all three levels; the per-level result stands as reported here.
+* **Control (orders alone):** orders p95 identical between builds at every level (changes 0.0%, -5.6%, 0.0%, -0.7%, 0.0%; all p at least 0.14), as expected because the `/orders` code is the same in both builds.
+* **Reading (for RESULTS.md, not for decisions):** separation traded `/login` latency for `/orders` latency once the CPU was saturated (100 and 200 users); nothing changed at 50 users or below. The pilot's `/orders` figure at 200 users (about -28%, 3 runs) differs from the counted result (-55%); the counted result is used. The 1-user rows have identical values, so their p-values are `nan` and their H1 label is not meaningful.
+* **Backup:** `results/final_backup.zip`, SHA-256 `173d9e67eb44f38235524326b3d501ab4ccdd2a28db5641cf7e1dd1bcd30d8da`. Copied to `C:\Users\USER\cpu-io-backup\final_backup.zip` (a second drive in the same PC), hash re-checked and matching on 2026-10-25. Off-PC copy (USB or cloud): TODO. Jars (`artifacts/*.jar`) not backed up; identified by the hashes recorded above.
+* **Next:** commit these entries, make the off-PC copy, write `RESULTS.md`, README fixes, design PDF revisions.
