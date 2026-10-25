@@ -107,3 +107,12 @@
 * **Resolved from "Pending":** intervention packaging (two jars) | config pass | `/orders` and `mixed` plans | monitor | driver.
 * **Integrity check (manual, as pre-registered):** the driver does not run it. Before and after each batch, run `CHECKSUM TABLE users, products, orders` and record the values in the batch entry; a change is a data-integrity fault. MySQL is restarted by hand before each batch.
 * **Next:** commit this entry and tag `plan-v1` (hash recorded in the batch 1 entry), set power plan and pause Windows Update, then start batch 1 (seq 1 to 70).
+
+
+### 2026-10-25: Batch 1 (seq 1 to 70)
+
+* **Plan:** tag `plan-v1`, commit `7230f6a28948da3290249eb3484f2d322ec0de43`. No changes since.
+* **Before:** MySQL restarted by hand. `CHECKSUM TABLE`: users `1701132287`, products `2759041946`, orders `2384344284`.
+* **Command:** `python -c "import sys; sys.path.insert(0,'scripts'); import driver; driver.run_batch('batch-01_2026-10-25', 1, 70)"`
+* **After:** `CHECKSUM TABLE` (MySQL not restarted): users `1701132287`, products `2759041946`, orders `2384344284`. All identical to "before".
+* **Outcome:** 70 of 70 runs ok on the first attempt, no `failed/` folder, no retries. Batch started 00:23 on 2026-10-25 (date rolled over, hence the heading date), took about 3 h 54 min. Results are in `analysis/runs.csv`.
