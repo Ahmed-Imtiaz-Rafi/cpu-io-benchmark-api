@@ -111,8 +111,19 @@
 
 ### 2026-10-25: Batch 1 (seq 1 to 70)
 
+### 2026-10-25: Batch 1 (seq 1 to 70), login alone
 * **Plan:** tag `plan-v1`, commit `7230f6a28948da3290249eb3484f2d322ec0de43`. No changes since.
 * **Before:** MySQL restarted by hand. `CHECKSUM TABLE`: users `1701132287`, products `2759041946`, orders `2384344284`.
 * **Command:** `python -c "import sys; sys.path.insert(0,'scripts'); import driver; driver.run_batch('batch-01_2026-10-25', 1, 70)"`
 * **After:** `CHECKSUM TABLE` (MySQL not restarted): users `1701132287`, products `2759041946`, orders `2384344284`. All identical to "before".
-* **Outcome:** 70 of 70 runs ok on the first attempt, no `failed/` folder, no retries. Batch started 00:23 on 2026-10-25 (date rolled over, hence the heading date), took about 3 h 54 min. Results are in `analysis/runs.csv`.
+* **Outcome:** 70 of 70 runs ok on the first attempt, no `failed/` folder, no retries. Started 00:23 on 2026-10-25 (the date rolled over), took about 3 h 54 min. Scenario: `login`, all five levels, 7 runs per build.
+* **Data:** raw runs in `results/final/batch-01_2026-10-25/` (git-ignored). `analysis/runs.csv` is regenerated from them.
+
+### 2026-10-25: Batch 2 (seq 71 to 140), orders alone
+
+* **Plan:** tag `plan-v1`, commit `7230f6a28948da3290249eb3484f2d322ec0de43`. No changes since.
+* **Before:** TODO (MySQL restart and the three values). I did not record them in this conversation; if not saved, note "not recorded" and rely on the "after" values matching batch 1.
+* **Command:** `python -c "import sys; sys.path.insert(0,'scripts'); import driver; driver.run_batch('batch-02_2026-10-25', 71, 140)"`
+* **After:** `CHECKSUM TABLE` (MySQL not restarted): users `1701132287`, products `2759041946`, orders `2384344284`. Identical to batch 1.
+* **Outcome:** 70 of 70 runs ok on the first attempt, no `failed/` folder, no retries. Ended 12:59 on 2026-10-25. Scenario: `orders`, all five levels, 7 runs per build.
+* **Data:** raw runs in `results/final/batch-02_2026-10-25/` (git-ignored). `analysis/runs.csv` is regenerated from them.
