@@ -80,3 +80,45 @@ Values are median p95 in milliseconds. Changes are relative to the baseline. "n/
 The control shows no difference between builds at any level, as expected for identical code.
 
 Levels 1 and 10 users are descriptive only, as stated in the plan. The automatic labels the analysis script prints for them are not meaningful.
+
+## 5. Interpretation
+
+**Mechanism.** In the baseline, up to 200 login requests can be inside BCrypt at the same time, sharing the machine's 16 logical processors with MySQL and the other requests. In the intervention, at most 8 logins run BCrypt at once and the remainder wait in the executor's queue. A waiting request uses no CPU, so `/orders` requests and MySQL receive a larger share of it. This is consistent with the observed pattern: no difference at 50 users and below, and a divergence once the CPU saturated (100 and 200 users). The explanation was not tested directly, since executor queue length was not recorded.
+
+**What the data support.** In this configuration, separation did not reduce login degradation. It increased login p95 at saturation in both scenarios, and it reduced `/orders` p95 in the mixed scenario. The orders-only control shows no difference between builds, so the measurement method does not itself produce differences.
+
+**Scope.** The results hold for this machine, a 1:15 request mix, a connection pool of 10 and an executor of 8 threads with a queue of 1000. Other ratios, hardware, pool sizes and executor sizes were not tested. The trade-off observed here would favour separation only where protecting the I/O-oriented endpoint matters more than login latency.
+
+**Pilot comparison.** The pilot (3 intervention runs) showed `/orders` p95 about 28% lower at 200 users in the mixed scenario. The counted result (7 runs) is 55% lower. The counted result is the one reported.
+
+## 6. Limitations
+
+* **Single machine.** The API, MySQL and JMeter share one CPU, so absolute values are specific to this setup. Only the comparison between builds is meaningful.
+* **`/orders` is not I/O-bound on this machine.** In the pilot's 200-user mixed runs, `mysqld` used about 970% CPU (percent of one core) against about 370% for the API, because the unindexed query runs on the same CPU. "I/O-oriented" describes the design intent, not a measured property.
+* **Connection pool.** Fixed at 10. In the pilot, a pool of 50 gave `/orders` p95 of 831 and 939 ms against 285 ms at 10 (orders alone, 200 users, baseline). Whether the intervention's effect depends on the pool size was not tested.
+* **One intervention design.** The whole `login()` method, including the user lookup, runs on the executor, and the executor has one configuration (8 threads, queue 1000).
+* **Load model.** No think time, so 200 users means 200 constantly busy clients. One request mix (1:15) was used.
+* **Resolution.** Levels between 50 and 100 users were not tested, so the onset of the effect is only bracketed.
+* **Secondary metrics.** Throughput and p99 are recorded in `analysis/runs.csv` and are not reported here. p99 is unreliable for login in the mixed scenario, where a run holds about 3,900 login requests.
+* **Run-to-run noise.** About one in six pilot runs showed an unexplained slowdown. Counted runs were kept without exclusion, and the median and the rank test limit its influence.
+* **Synthetic data.** Users, products and orders were generated. BCrypt strength 10 costs about 54.5 ms per check on this CPU.
+
+## 7. Reproduction
+
+| Item | Identifier |
+|---|---|
+| Analysis plan | tag `plan-v1`, commit `7230f6a28948da3290249eb3484f2d322ec0de43` |
+| Baseline | tag `baseline-v2`, commit `00c19ebcd8486ee81c9a5079680524ccf87c2307`, jar SHA-256 `c875668229e2c9419e607ccccac6edfc3736d506b9e9d4fbfb3d0263c8d26f08` |
+| Intervention | tag `intervention-v1`, commit `30a0166b68481b633c64915b0bbce42488872f35`, jar SHA-256 `c411d1a3211b8cb7d3144f667520e63bb392100e056aca073a0f7ece1b88cdff` |
+| Database dump | `db/cpu_io_benchmark_db.sql`, SHA-256 `8569431a55f23e7f4880a1e32f242357f051e921929a5252951dd68aba2f6df9` |
+| Credentials file | `db/seeded-users.csv`, SHA-256 `552af2311d76d5618fc563000a877ac0d15919a7a4232bef9160f5c5d1034837` |
+| Benchmark settings | `config/benchmark.properties`, SHA-256 `a4556f6db23ff6f94e4f48b5b3a311410bbafbbd6e04ccdc4e717833865731cb` |
+| Raw results archive | `final_backup.zip`, SHA-256 `173d9e67eb44f38235524326b3d501ab4ccdd2a28db5641cf7e1dd1bcd30d8da` (not in the repository) |
+
+1. Restore the dump and verify the dataset checksums, as described in the README.
+2. Build each tag once with Temurin 25.0.4.1, copy the jars to `artifacts/` and record their SHA-256 values in `scripts/driver_config.json`. Rebuilt jars have the same code but different hashes (the build embeds timestamps), and the driver refuses to start if a hash does not match its configuration.
+3. Close the JMeter GUI, restart MySQL, and run `CHECKSUM TABLE users, products, orders` before and after each batch.
+4. Run each batch from the project root: `python -c "import sys; sys.path.insert(0,'scripts'); import driver; driver.run_batch('<name>', <first>, <last>)"`, using runs 1 to 70, 71 to 140 and 141 to 210 of `scripts/schedule.csv`.
+5. Analyse with `python scripts/analyze_runs.py results/final`, then `python scripts/verdicts.py` and `python scripts/make_figures.py`.
+
+Absolute numbers will differ on other hardware. The comparison between builds is what should be reproduced.
