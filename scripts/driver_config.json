@@ -3,7 +3,8 @@
   "jmeter": "C:/Users/USER/Downloads/apache-jmeter-5.6.3/apache-jmeter-5.6.3/bin/jmeter.bat",
   "jars": {
     "baseline": "artifacts/baseline.jar",
-    "intervention": "artifacts/intervention.jar"
+    "intervention": "artifacts/intervention.jar",
+    "intervention_v2": "artifacts/intervention-v2.jar"
   },
   "benchmark_properties": "config/benchmark.properties",
   "plans": {
@@ -19,6 +20,7 @@
   "idle_window_s": 10,
   "jar_sha256": {
     "baseline": "c875668229e2c9419e607ccccac6edfc3736d506b9e9d4fbfb3d0263c8d26f08",
-    "intervention": "c411d1a3211b8cb7d3144f667520e63bb392100e056aca073a0f7ece1b88cdff"
+    "intervention": "c411d1a3211b8cb7d3144f667520e63bb392100e056aca073a0f7ece1b88cdff",
+    "intervention_v2": "ae066f88954671d2fabde60b51318d9635b4dcfabe7943075ee51b6eb87bed3f"
   }
 }

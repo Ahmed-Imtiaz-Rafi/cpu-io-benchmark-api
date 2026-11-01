@@ -19,11 +19,17 @@ def port_free(port):
     with socket.socket() as s:
         return s.connect_ex(("127.0.0.1", port)) != 0
 
+def jar_key(build):
+    return "intervention_v2" if build.startswith("size") else build
+
+
+def size_args(build):
+    return ["--app.cpu-executor.size=" + build[4:]] if build.startswith("size") else []
 
 def start_api(build, log_path):
     gc = os.path.join(os.path.dirname(log_path), "gc.log")
-    cmd = [cfg["java"], f"-Xlog:gc:file={gc}:uptime,time", "-jar", cfg["jars"][build],
-           "--spring.config.additional-location=file:" + cfg["benchmark_properties"]] + cfg.get("extra_args", [])
+    cmd = [cfg["java"], f"-Xlog:gc:file={gc}:uptime,time", "-jar", cfg["jars"][jar_key(build)],
+           "--spring.config.additional-location=file:" + cfg["benchmark_properties"]] + size_args(build) + cfg.get("extra_args", [])
     log = open(log_path, "w")
     return subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
 
@@ -84,7 +90,8 @@ def run_one(seq, scenario, users, rep, build, run_name, out_dir):
     stop_api(api)
     meta = {"seq": seq, "scenario": scenario, "users": users, "rep": rep,
             "build": build, "start_ms": t0, "end_ms": t1, "jmeter_exit": jm.returncode,
-            "jar_sha256": cfg["jar_sha256"][build], "java": java_version()}
+            "jar_sha256": cfg["jar_sha256"][jar_key(build)], "java": java_version(),
+            "cpu_executor_size": (int(build[4:]) if build.startswith("size") else (8 if build == "intervention" else None)),}
     json.dump(meta, open(os.path.join(d, "meta.json"), "w"), indent=2)
     if jm.returncode != 0:
         return "fault: jmeter"
@@ -112,13 +119,13 @@ def java_version():
     r = subprocess.run([cfg["java"], "-version"], capture_output=True, text=True)
     return r.stderr.strip().splitlines()[0]
 
-def run_batch(batch_name, start_seq=1, end_seq=None, out_root="results/final"):
+def run_batch(batch_name, start_seq=1, end_seq=None, out_root="results/final", schedule="scripts/schedule.csv"):
     check_jars()
     out_dir = os.path.join(out_root, batch_name)
     os.makedirs(out_dir, exist_ok=True)
     log = open(os.path.join(out_dir, "batch.log"), "a")
     log.write(f"batch start {time.ctime()} | {java_version()}\n")
-    rows = list(csv.DictReader(open("scripts/schedule.csv")))
+    rows = list(csv.DictReader(open(schedule)))
     for r in rows:
         seq = int(r["seq"])
         if seq < start_seq or (end_seq and seq > end_seq):
