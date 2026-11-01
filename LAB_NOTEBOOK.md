@@ -146,4 +146,24 @@
 * **Control (orders alone):** orders p95 identical between builds at every level (changes 0.0%, -5.6%, 0.0%, -0.7%, 0.0%; all p at least 0.14), as expected because the `/orders` code is the same in both builds.
 * **Reading (for RESULTS.md, not for decisions):** separation traded `/login` latency for `/orders` latency once the CPU was saturated (100 and 200 users); nothing changed at 50 users or below. The pilot's `/orders` figure at 200 users (about -28%, 3 runs) differs from the counted result (-55%); the counted result is used. The 1-user rows have identical values, so their p-values are `nan` and their H1 label is not meaningful.
 * **Backup:** `results/final_backup.zip`, SHA-256 `173d9e67eb44f38235524326b3d501ab4ccdd2a28db5641cf7e1dd1bcd30d8da`. Copied to `C:\Users\USER\cpu-io-backup\final_backup.zip` (a second drive in the same PC), hash re-checked and matching on 2026-10-25. Off-PC copy (USB or cloud): TODO. Jars (`artifacts/*.jar`) not backed up; identified by the hashes recorded above.
-* **Next:** commit these entries, make the off-PC copy, write `RESULTS.md`, README fixes, design PDF revisions.
+
+### 2026-11-01: Pre-registered Plan v2 (exploratory): executor size sweep
+
+* **Status:** Written before any v2 run. Exploratory follow-up to `plan-v1`. It does not revise the H1a, H1b or H2 verdicts. Edits only by dated amendments. Check runs do not count. Tag `plan-v2` before the first counted v2 run.
+* **Question:** Does enlarging the login executor recover or improve `/login` p95 relative to the baseline while keeping the `/orders` benefit, and at what size?
+* **Background (plan-v1 data, not re-tested):** with 8 executor threads, login p95 was +155% (100 users) and +684% (200 users) in mixed, +57% and +62% login-only. Orders p95 was -13% and -55% in mixed. Login-only at 200 users: throughput 134/s vs 198/s, API CPU about 800 vs about 1,287 (percent of one logical processor), machine about 52% vs 86% busy. Little's law, mixed 200 users, rep1: users inside login about 15 (baseline) vs about 120 (intervention); inside orders about 185 vs about 78.
+* **Builds:** baseline = `baseline-v2` jar. Intervention sizes 16, 32 and 64 = one new jar (tag `intervention-v2`) that reads the executor size from `app.cpu-executor.size` (default 8). Core = max = size, queue 1000, everything else identical to `intervention-v1`. The driver passes the size at launch and records it in `meta.json`. The 8-thread results from `plan-v1` are reference only and are not compared statistically (different days).
+* **Scenarios and levels:** `login` and `mixed` (1 login : 15 orders), 100 and 200 users. Levels of 50 and below showed no effect. Orders alone is not repeated.
+* **Runs:** 8 per condition. 4 builds × 2 scenarios × 2 levels × 8 = 128 runs (about 7.1 h). Order: blocks of (scenario, level, rep), with the 4 builds in rotated order (ABCD, BCDA, CDAB, DABC, repeating), so each build occupies each position twice. Run length, ramp-up, trim, cooldown, quiet gate, restart per run, MySQL checks and the bad-run rule are unchanged from `plan-v1`.
+* **Metrics:** primary: p95 per run (90 s window). Secondary: throughput. Diagnostic: mean latency, error rate, CPU per process, users inside each endpoint by Little's law (rate × mean latency, per label).
+* **Statistics:** two-sided Mann-Whitney U, each size vs baseline, per scenario, level and endpoint. Holm correction across the 3 sizes within each (scenario, level, endpoint) family, adjusted p < 0.05. Practical threshold 10%, as in `plan-v1`.
+* **Predefined outcomes (per size, per level):**
+  * Login: Improvement = p95 at least 10% lower than baseline and adjusted p < 0.05 | Recovery = change at most +10% | Degraded = change above +10%.
+  * Orders (mixed): Benefit retained = at least 10% lower and adjusted p < 0.05 | Harm = more than +10% and adjusted p < 0.05 | otherwise Benefit lost.
+  * Sweet spot = a size with login Recovery or Improvement and orders Benefit retained at both 100 and 200 users in mixed.
+  * Headline: the smallest size with login Recovery at both levels in mixed, and what orders does at that size. If none, "no tested size recovers login p95".
+* **Predictions (declared before data):** P1 login p95 falls as size grows (mixed and login-only). P2 orders p95 rises as size grows, toward the baseline. P3 login-only throughput at 16 threads or more approaches the baseline (about 198/s) and API CPU rises toward the baseline. P4 users inside login fall as size grows. P5 no size gives a 10% login improvement over the baseline. Each is reported as held or not held.
+* **Checks before counted runs (not counted):** `jcmd` shows exactly N `cpu-` threads for each size | `/login` returns 200 and 401 | driver dry run on a mini-matrix | jar hashes and settings recorded.
+* **Pending:** executor size property and `intervention-v2` tag and jar | driver support for builds with a size argument | schedule generator for the rotation | analysis support for the sweep (Holm).
+* **Next:** after the results, decide whether other measurements are needed (8 threads re-run in the same conditions, other request ratios, core isolation).
+
