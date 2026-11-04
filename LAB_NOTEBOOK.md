@@ -145,7 +145,7 @@
 * **H2 (orders in mixed): holds, no negative impact.** Orders p95: 1 user 8 / 8 | 10 users 17 / 17 | 50 users 76 / 76 | 100 users 152 / 132 (-13.2%, p 0.0020) | 200 users 302 / 135 (-55.3%, p 0.0020). Positive impact at 100 and 200 users, none at 50 or below. The script's wording ("no substantial impact detected") understates this, because the positive label requires all three levels; the per-level result stands as reported here.
 * **Control (orders alone):** orders p95 identical between builds at every level (changes 0.0%, -5.6%, 0.0%, -0.7%, 0.0%; all p at least 0.14), as expected because the `/orders` code is the same in both builds.
 * **Reading (for RESULTS.md, not for decisions):** separation traded `/login` latency for `/orders` latency once the CPU was saturated (100 and 200 users); nothing changed at 50 users or below. The pilot's `/orders` figure at 200 users (about -28%, 3 runs) differs from the counted result (-55%); the counted result is used. The 1-user rows have identical values, so their p-values are `nan` and their H1 label is not meaningful.
-* **Backup:** `results/final_backup.zip`, SHA-256 `173d9e67eb44f38235524326b3d501ab4ccdd2a28db5641cf7e1dd1bcd30d8da`. Copied to `C:\Users\USER\cpu-io-backup\final_backup.zip` (a second drive in the same PC), hash re-checked and matching on 2026-10-25. Off-PC copy (USB or cloud): TODO. Jars (`artifacts/*.jar`) not backed up; identified by the hashes recorded above.
+* **Backup:** `results/final_backup.zip`, SHA-256 `173d9e67eb44f38235524326b3d501ab4ccdd2a28db5641cf7e1dd1bcd30d8da`. Copied to `C:\Users\USER\cpu-io-backup\final_backup.zip` (a second drive in the same PC), hash re-checked and matching on 2026-10-25. Off-PC copy (USB or cloud):  not made. Jars (`artifacts/*.jar`) not backed up; identified by the hashes recorded above.
 
 ### 2026-11-01: Pre-registered Plan v2 (exploratory): executor size sweep
 
@@ -192,3 +192,24 @@
 * **Prediction check:** P5 (no size gives a 10% login improvement) did not hold in the login scenario. P1 held in direction: login p95 is lowest at size16 and rises with size, still below the baseline at size64. P3 (throughput approaching the baseline) held, since throughput matched the baseline at all sizes. P2 and P4 depend on the mixed scenario (batch 2).
 * **Reading (for RESULTS.md, not for decisions):** the improvement appears with unchanged throughput, so it comes from the order of service (fewer simultaneous logins, each served faster) and a narrower latency spread, not from extra CPU capacity. The 8-thread result in plan-v1 was worse because 8 threads left about half of the machine idle.
 * **Data:** raw runs in `results/final_v2/v2-batch-01_2026-11-03/` (git-ignored). `analysis/runs_v2.csv` is regenerated from them.
+
+### 2026-11-04: Correction to the v2 batch 1 entry
+
+* **Correction:** the "Prediction check" line said P1 held in direction. It did not: within the tested sizes, login-only p95 rises with executor size (size16 lowest). P1 is recorded as not held in the v2 results entry. No data or rule is changed.
+
+### 2026-11-04: Results of plan v2 (executor size sweep, 128 runs)
+
+* **Data:** 128 counted runs (2 batches × 64), 8 per condition, no failed attempts, no retries, no exclusions. Checksums of `users`, `products`, `orders` unchanged across both batches and all earlier batches. 0 failed requests in the analysis rows (checked in `analysis/runs_v2.csv`: 0 failed requests).
+* **Analysis:** `scripts/analyze_v2.py` (Holm correction across 3 sizes per scenario, level and endpoint) and `scripts/cpu_summary.py`, outcome rules as written in plan v2. Written after the plan tag and first run on batch 1 data.
+* **Login only, `/login` p95 ms (median of 8), change vs baseline, adjusted p:**
+  * 100 users: baseline 792 | size16 522 (-34.0%, 0.0027) | size32 578 (-27.1%, 0.0027) | size64 692 (-12.7%, 0.0027). Improvement at all sizes.
+  * 200 users: baseline 1,630 | size16 1,024 (-37.2%, 0.0005) | size32 1,094 (-32.9%, 0.0005) | size64 1,202 (-26.3%, 0.0005). Improvement at all sizes.
+  * Throughput about 200 per second in every build; mean latency about 498 ms (100 users) and 985 to 1,007 ms (200 users). p95 over mean at 200 users: baseline 1.65, size16 1.03, size32 1.09, size64 1.19.
+* **Mixed, `/login` p95:** 100 users baseline 209 | 209 | 210 | 209. 200 users baseline 362 | 366 | 358 | 360. Changes within 1.1%, adjusted p at least 0.81. Outcome: recovery (no difference).
+* **Mixed, `/orders` p95:** 100 users baseline 152 | 153 | 154 | 152 (changes +0.3%, +0.7%, -0.3%, adjusted p 1.0). 200 users baseline 318 | 304 (-4.6%, p 0.0534) | 306 (-3.8%, p 0.102) | 308 (-3.3%, p 0.102). Outcome: benefit lost (no difference beyond 10%).
+* **CPU (mean over runs after the 30 s trim; sys percent, API and MySQL in percent of one logical processor):** login only, all builds: sys 97.8 to 98.9, API 1,531 to 1,553 (of 1,600). Mixed, all builds: sys 85.5 to 86.4, API 360 to 370, MySQL 959 to 965. No build differs from the baseline by more than about 1.5% in any CPU figure.
+* **Headline (as defined in plan v2):** the smallest size with login recovery at both levels in mixed is 16, and at 16 the `/orders` benefit is not retained. No tested size is a sweet spot.
+* **Predictions:** P1 not held (login-only p95 rises with size: 522, 578, 692 at 100 users; flat in mixed) | P2 not testable at the sizes run (the benefit is already absent at 16) | P3 held (throughput and CPU match the baseline at every size) | P4 not held (users inside login: 9 at 100 users and 15 at 200 users in mixed, equal across builds) | P5 not held in the login-only scenario (improvements of 13% to 37%), held in mixed.
+* **Reading (for RESULTS.md, not for decisions):** in the login-only scenario the bounded executor improves p95 without changing throughput, CPU use or mean latency, so the effect is on the spread of latencies (more uniform service). The effect shrinks as the pool grows. At the 1:15 mix, logins are about 6% of requests (about 44 per second), well below what 16 threads can handle, so no login queue forms and the build behaves like the baseline. The plan-v1 trade-off (8 threads) therefore arises from a pool too small to keep the CPU busy, and lies between 8 and 16 threads, which this sweep did not test.
+* **Limits:** two scenarios, two levels, one mix, one machine, sizes 16, 32 and 64 only. Sizes below 16 and other login shares were not tested.
+* **Next:** decide whether a further pre-registered test is needed (sizes between 8 and 16, other request ratios), update `RESULTS.md` and the README with the v2 findings.
