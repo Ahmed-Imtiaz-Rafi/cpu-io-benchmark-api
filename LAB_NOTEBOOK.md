@@ -213,3 +213,20 @@
 * **Reading (for RESULTS.md, not for decisions):** in the login-only scenario the bounded executor improves p95 without changing throughput, CPU use or mean latency, so the effect is on the spread of latencies (more uniform service). The effect shrinks as the pool grows. At the 1:15 mix, logins are about 6% of requests (about 44 per second), well below what 16 threads can handle, so no login queue forms and the build behaves like the baseline. The plan-v1 trade-off (8 threads) therefore arises from a pool too small to keep the CPU busy, and lies between 8 and 16 threads, which this sweep did not test.
 * **Limits:** two scenarios, two levels, one mix, one machine, sizes 16, 32 and 64 only. Sizes below 16 and other login shares were not tested.
 * **Next:** decide whether a further pre-registered test is needed (sizes between 8 and 16, other request ratios), update `RESULTS.md` and the README with the v2 findings.
+
+### 2026-11-07: Pre-registered Plan v3 (exploratory): database pool size sweep
+
+* **Question:** in the mixed scenario, can a smaller Hikari connection pool improve `/login` p95 without hurting `/orders` p95?
+* **Motivation (unregistered diagnosis, no claim rests on it):** during mixed, baseline, 200-user runs, CPU was spread evenly across cores (no idle cores to isolate). Thread dumps from two separate runs showed 187 to 188 of 202 request threads waiting for a pool connection (175 orders, 12 login, about the 1:15 mix), 2 to 3 in BCrypt, none BLOCKED. MySQL CPU was about 960, close to the pool size of 10. JMeter ran on the same PC and used about 15 on that scale.
+* **Build:** baseline jar only. The only changed setting is `spring.datasource.hikari.maximum-pool-size`, passed as a launch argument. No code change. `spring.datasource.hikari.minimum-idle` is set equal to `maximum-pool-size` in every condition (as in the baseline, where both are 10), so the pool is fixed-size.
+* **Conditions:** pool size 4, 6, 8 and 10 (10 is the control, rerun inside this batch, v2 baselines are not reused). Scenario `mixed` (1 login : 15 orders), 100 and 200 users, 8 runs per condition, 64 runs in total.
+* **Primary comparison:** mixed `/login` p95, each smaller pool against pool 10, at both levels.
+* **Thresholds (fixed before any run):**
+  * Login p95 must improve by at least 10% at 100 users and at least 15% at 200 users.
+  * `/orders` p95 must not be worse by 5% or more at 100 users, or by 10% or more at 200 users.
+* **Tests:** Mann-Whitney U on per-run p95, Holm correction across the 3 pool sizes per level and endpoint. Login needs adjusted p below 0.05. For orders, a size passes the safety condition only if the upper bound of the 95% bootstrap confidence interval for the median change stays below the limit.
+* **Success:** a pool size succeeds only if all four conditions hold (login at both levels, orders at both levels). All succeeding sizes are reported. The headline is the succeeding size with the lowest login p95 at 200 users. If none succeeds, the result is "no pool size meets the aim on this machine".
+* **Predictions:** P1 smaller pools lower login p95 at 200 users. P2 `/orders` p95 is not worse at sizes 6 to 8. P3 size 4 worsens `/orders` (pool too small to keep MySQL busy). P4 throughput does not fall below the baseline by more than 5%.
+* **Exclusions and stopping:** same rules as plan v2. A failed attempt is moved to `failed/` and retried up to 3 times. No run is dropped after seeing results. No rule changes after the first run.
+* **Setup limits:** one machine, with JMeter, the API, MySQL and the monitor all on the same 16 logical processors. Results describe this co-located setup. The best size is reported as a ratio to logical processors as well as an absolute number.
+* **Not claimed:** the pilot result (pool 10 against 50) and the dump counts are motivation only.
