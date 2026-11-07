@@ -230,3 +230,10 @@
 * **Exclusions and stopping:** same rules as plan v2. A failed attempt is moved to `failed/` and retried up to 3 times. No run is dropped after seeing results. No rule changes after the first run.
 * **Setup limits:** one machine, with JMeter, the API, MySQL and the monitor all on the same 16 logical processors. Results describe this co-located setup. The best size is reported as a ratio to logical processors as well as an absolute number.
 * **Not claimed:** the pilot result (pool 10 against 50) and the dump counts are motivation only.
+
+### 2026-11-07: Amendment to Plan v3 (driver and schedule ready)
+
+* **Commit:** `8ac1b92`, after the `plan-v3` tag (`6610bf9`). No plan rule is changed.
+* **Driver:** builds named `poolN` use the baseline jar and pass `--spring.datasource.hikari.maximum-pool-size=N` and `--spring.datasource.hikari.minimum-idle=N`. The run metadata records `hikari_pool_size`.
+* **Schedule:** `scripts/schedule_v3.csv`, 64 runs (pool 10, 8, 6 and 4; mixed; 100 and 200 users; 8 runs each). Build order rotates within each block of 4, the same method as v2, and is not a random shuffle. The control, `pool10`, is rerun inside this batch.
+* **Generator:** `scripts/make_schedule_v3.py`.
