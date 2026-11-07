@@ -20,11 +20,21 @@ def port_free(port):
         return s.connect_ex(("127.0.0.1", port)) != 0
 
 def jar_key(build):
-    return "intervention_v2" if build.startswith("size") else build
+    if build.startswith("size"):
+        return "intervention_v2"
+    if build.startswith("pool"):
+        return "baseline"
+    return build
 
 
 def size_args(build):
-    return ["--app.cpu-executor.size=" + build[4:]] if build.startswith("size") else []
+    if build.startswith("size"):
+        return ["--app.cpu-executor.size=" + build[4:]]
+    if build.startswith("pool"):
+        n = build[4:]
+        return ["--spring.datasource.hikari.maximum-pool-size=" + n,
+                "--spring.datasource.hikari.minimum-idle=" + n]
+    return []
 
 def start_api(build, log_path):
     gc = os.path.join(os.path.dirname(log_path), "gc.log")
@@ -89,6 +99,7 @@ def run_one(seq, scenario, users, rep, build, run_name, out_dir):
     mon.terminate()
     stop_api(api)
     meta = {"seq": seq, "scenario": scenario, "users": users, "rep": rep,
+            "hikari_pool_size": (int(build[4:]) if build.startswith("pool") else 10),
             "build": build, "start_ms": t0, "end_ms": t1, "jmeter_exit": jm.returncode,
             "jar_sha256": cfg["jar_sha256"][jar_key(build)], "java": java_version(),
             "cpu_executor_size": (int(build[4:]) if build.startswith("size") else (8 if build == "intervention" else None)),}
