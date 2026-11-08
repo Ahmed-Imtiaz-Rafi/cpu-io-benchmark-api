@@ -237,3 +237,31 @@
 * **Driver:** builds named `poolN` use the baseline jar and pass `--spring.datasource.hikari.maximum-pool-size=N` and `--spring.datasource.hikari.minimum-idle=N`. The run metadata records `hikari_pool_size`.
 * **Schedule:** `scripts/schedule_v3.csv`, 64 runs (pool 10, 8, 6 and 4; mixed; 100 and 200 users; 8 runs each). Build order rotates within each block of 4, the same method as v2, and is not a random shuffle. The control, `pool10`, is rerun inside this batch.
 * **Generator:** `scripts/make_schedule_v3.py`.
+
+### 2026-11-08: v3 Batch 1 (seq 1 to 64), mixed
+
+* **Plan:** tag `plan-v3` (commit `6610bf9`), amendment commit `8ac1b92` and notebook amendment `5fa6551`. No plan change since.
+* **Before:** MySQL restarted by hand. `CHECKSUM TABLE`: users `1701132287`, products `2759041946`, orders `2384344284`.
+* **Command:** `python -c "import sys; sys.path.insert(0,'scripts'); import driver; driver.run_batch('v3-batch-01_2026-11-07', 1, 64, 'results/final_v3', 'scripts/schedule_v3.csv')"`
+* **After:** `CHECKSUM TABLE` (MySQL not restarted): users `1701132287`, products `2759041946`, orders `2384344284`. Identical to "before" and to every earlier batch.
+* **Outcome:** 64 of 64 runs ok on the first attempt, no `failed/` folder, no retries. Batch ended 02:43 on 2026-11-08. Scenario `mixed` (1 login : 15 orders), 100 and 200 users, builds pool10 (control), pool8, pool6, pool4, 8 runs each.
+* **Analysis script:** `scripts/analyze_v3.py` (Mann-Whitney U with Holm correction across 3 pool sizes per level and endpoint; bootstrap 95% CI for the orders change, 10,000 resamples, seed 42). It was written after the batch data existed and applies only the rules written in plan v3. No rule changed after seeing data.
+* **Data:** raw runs in `results/final_v3/v3-batch-01_2026-11-07/` (git-ignored). `analysis/runs_v3.csv` is regenerated from them.
+
+### 2026-11-08: Results of plan v3 (Hikari pool size sweep, 64 runs)
+
+* **Data:** 64 counted runs, 8 per condition, no failed attempts, no retries, no exclusions. Table checksums unchanged across the batch and all earlier batches.
+* **Login p95 ms (median of 8), change vs pool10, Holm-adjusted p:**
+  * 100 users: pool10 212 | pool8 220 (+3.5%, 0.0128) | pool6 234 (+10.4%, 0.0026) | pool4 265 (+24.7%, 0.0026).
+  * 200 users: pool10 360 | pool8 370 (+2.6%, 0.0026) | pool6 397 (+10.1%, 0.0026) | pool4 460 (+27.7%, 0.0026).
+  * No size improved login. Login p95 rose as the pool shrank.
+* **Orders p95 ms (median of 8), change vs pool10, upper bound of the 95% CI:**
+  * 100 users: pool10 152 | pool8 160 (+5.6%, +10.4%) | pool6 170 (+12.5%, +28.4%) | pool4 208 (+37.3%, +45.5%).
+  * 200 users: pool10 297 | pool8 304 (+2.5%, +4.4%) | pool6 333 (+12.1%, +12.8%) | pool4 398 (+34.0%, +34.9%).
+  * Only pool8 at 200 users met the orders safety limit.
+* **Throughput (requests per second, orders / login):** 100 users: pool10 653 / 44, pool8 606 / 40, pool6 576 / 38, pool4 467 / 31. 200 users: pool10 654 / 44, pool8 633 / 42, pool6 577 / 38, pool4 477 / 32.
+* **Outcome (as defined in plan v3):** no pool size succeeds. Login failed at every size and level, and orders failed at every cell except pool8 at 200 users. Result: no pool size meets the aim on this machine.
+* **Predictions:** P1 not held (smaller pools raised login p95) | P2 not held (pool6 worse at both levels, pool8 worse at 100 users) | P3 held (pool4 worsens orders by 34% to 37%) | P4 not held (orders throughput fell 7% at pool8 with 100 users, 12% at pool6, 27% to 29% at pool4).
+* **Reading (for RESULTS.md, not for decisions):** within the sizes tested, fewer connections lowered database throughput for both endpoints, so both waited longer. The diagnosis showed most request threads queued for a connection, but shrinking the queue's service rate did not help. The earlier pilot (pool 10 against 50) points the other way, so any gain may lie above 10, which this sweep did not test. That is a hypothesis, not a result.
+* **Limits:** one machine with JMeter, the API, MySQL and the monitor on the same 16 logical processors, one mix, sizes 4 to 10 only.
+* **Next:** decide whether a further pre-registered test is needed (pool sizes above 10), update `RESULTS.md` and the README with the v2 and v3 findings.
