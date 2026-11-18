@@ -43,10 +43,12 @@ Everything that could affect the measurements is pinned. Do not change these bet
 | Spring Boot | 4.1.1 |
 | Embedded Tomcat | 11.0.26 (default request pool of 200 threads, unchanged) |
 | Logback | 1.6.5 |
+| Hibernate ORM | 7.4.5.Final |
+| HikariCP | 7.0.2 (pool size 10 by default, varied in plan v3) |
 | Jackson | 3.1.7 |
 | MySQL Connector/J | 26.7.0 |
 | Datafaker | 2.7.0 |
-| spring-security-crypto | managed by Spring Boot (BCrypt, strength 10) |
+| spring-security-crypto | 7.1.1 (BCrypt, strength 10) |
 | MySQL server | 8.0.46 |
 | Apache JMeter | 5.6.3 (non-GUI mode for all real runs) |
 | Python / psutil | 3.12.10 / 7.2.2 (driver and monitor) |
@@ -217,7 +219,7 @@ curl http://localhost:8080/users/1/orders
 ## Repository layout
 
 ```
-analysis/                  per-run result tables (runs_v2.csv, runs_v3.csv, and the plan v1 table)
+analysis/                  per-run result tables (runs.csv for plan v1, runs_v2.csv, runs_v3.csv, and runs_check.csv for the unregistered baseline check)
 config/                    benchmark settings shared by all builds
 db/                        dump and credentials file (fixed dataset)
 jmeter/                    JMeter test plans (.jmx)
