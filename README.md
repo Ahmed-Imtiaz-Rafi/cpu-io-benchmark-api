@@ -2,7 +2,15 @@
 
 A Spring Boot REST API built to study how CPU-bound and I/O-bound workloads behave differently under concurrent load, and whether separating CPU-bound work onto its own thread pool reduces degradation.
 
-This repository holds the test application, the fixed dataset, the load-test plans, and everything needed to reproduce the experiment's starting conditions. Results are in [`RESULTS.md`](RESULTS.md): H1 (login p95 improvement) was not supported, H2 (no harm to `/orders`) held. The pre-registered plan and dated record of the work are in [`LAB_NOTEBOOK.md`](LAB_NOTEBOOK.md).
+This repository holds the test application, the fixed dataset, the load-test plans, and everything needed to reproduce the experiment's starting conditions. Results are in [`RESULTS.md`](RESULTS.md). The pre-registered plans and the dated record of the work are in [`LAB_NOTEBOOK.md`](LAB_NOTEBOOK.md).
+
+The study has three parts:
+
+- **Plan v1 (pre-registered, 210 runs):** baseline against an 8-thread login executor. H1 (login p95 improvement) was not supported, and H2 (no harm to `/orders`) held.
+- **Plan v2 (exploratory, 128 runs):** executor sizes 16, 32 and 64 against the baseline, at 100 and 200 users. In the login-only scenario the executor lowered login p95 without changing throughput or CPU use. In the mixed scenario every size matched the baseline.
+- **Plan v3 (exploratory, 64 runs):** database connection pool sizes 4, 6 and 8 against 10, in the mixed scenario at 100 and 200 users. No pool size met the aim, and smaller pools made both endpoints slower.
+
+Plans v2 and v3 are exploratory, not confirmatory. See [Experimental design](#experimental-design-summary) and [Known limitations](#known-limitations).
 
 ## Research question
 
@@ -17,9 +25,12 @@ How does a Spring Boot REST API perform under CPU-bound versus I/O-bound workloa
 |---|---|
 | Baseline (synchronous) API | Done (tag `baseline-v2`) |
 | Fixed dataset, dump and credentials file | Done, checksums below |
-| Analysis plan | Fixed before counted runs (tag `plan-v1`) |
+| Analysis plan v1 | Fixed before counted runs (tag `plan-v1`) |
 | Intervention (dedicated 8-thread executor for login) | Done (tag `intervention-v1`) |
-| Load tests, 210 runs in 3 batches | Done |
+| Load tests, plan v1, 210 runs in 3 batches | Done |
+| Configurable executor size | Done (tag `intervention-v2`) |
+| Executor size sweep, plan v2, 128 runs in 2 batches | Done (tag `plan-v2`) |
+| Database pool size sweep, plan v3, 64 runs in 1 batch | Done (tag `plan-v3`) |
 | Analysis and results | Done, see `RESULTS.md` |
 
 ## Stack and pinned versions
@@ -78,6 +89,7 @@ Design choices that matter for the experiment:
 - Every user has the same number of orders, so every `/users/{userId}/orders` response is the same size.
 - Order dates fall in 2026 and user signup dates in 2025. Both are drawn from the seeded random generator.
 - BCrypt strength is 10, about 54.5 ms per verification on the development machine (Ryzen 5700X, single thread, after warm-up). Each +1 doubles the cost.
+- Table checksums (`CHECKSUM TABLE`) were recorded before and after every batch and were identical throughout: users `1701132287`, products `2759041946`, orders `2384344284`.
 
 ### Credentials file
 
@@ -122,7 +134,11 @@ Check yours with `sha256sum db/*`. A `.gitattributes` rule stores both files byt
 
    **Option B: run the seeder.** Add `spring.jpa.hibernate.ddl-auto=update` and `app.seed.enabled=true` to your local `application.properties` and do **not** pass `benchmark.properties`, because it forces the seeder off. Run once with `update` so Hibernate creates the tables. The seeder refuses to run if any table already has rows, so empty all three first with `TRUNCATE TABLE orders; TRUNCATE TABLE users; TRUNCATE TABLE products;`. Use `TRUNCATE`, not `DELETE`, because only `TRUNCATE` resets the auto-increment ids, and the ids must start at 1 to match the CSV. The seeder writes the CSV relative to the working directory, which is why it must run from the project root. Expect about a minute of BCrypt hashing. Then set the flag back to `false` and remove the `update` line. This produces equivalent data, not byte-identical hashes.
 
+   The flag `app.seed.enabled` defaults to `false`. If the seeder fails after writing data, it deletes what it inserted and stops the application. Run `TRUNCATE` on all three tables before retrying so the ids start at 1 again.
+
 4. Benchmark settings are not in `application.properties`. They live in `config/benchmark.properties` (show-sql off, `ddl-auto=validate`, connection pool 10, Tomcat threads 200, seeder off). For any measurement, launch with `--spring.config.additional-location=file:config/benchmark.properties`.
+
+   Launch arguments override that file. Plan v2 passes `--app.cpu-executor.size=N` for the executor builds. Plan v3 passes `--spring.datasource.hikari.maximum-pool-size=N` and `--spring.datasource.hikari.minimum-idle=N` together, so the pool stays fixed-size. The driver (`scripts/driver.py`) adds these arguments from the build name (`sizeN` or `poolN`).
 
 5. Start the application:
    ```
@@ -140,14 +156,36 @@ curl http://localhost:8080/users/1/orders
 
 ## Experimental design (summary)
 
+### Plan v1 (pre-registered, 210 runs)
+
 - **Baseline:** both endpoints synchronous, one shared Tomcat pool of 200 threads.
 - **Intervention:** `AuthService.login` runs on a separate executor (8 core and 8 maximum threads, queue 1000, `@Async`). The Tomcat pool stays at 200.
 - **Load:** 1, 10, 50, 100 and 200 concurrent users, 7 runs per condition, warm-up excluded.
-- **Run parameters:** 10 s ramp-up, 120 s runs with the first 30 s discarded, no think time, 30 s timeouts, API restarted before every run, 60 s cooldown, build order alternating in pairs, 7 runs per condition (210 in total).
-- **Machine:** the whole experiment runs on a single PC (see below). The API, MySQL, JMeter (command-line mode) and the monitoring script share it, so absolute numbers are specific to this setup. Baseline and intervention runs use the identical setup, so the comparison between them stays valid.
+- **Run parameters:** 10 s ramp-up, 120 s runs with the first 30 s discarded, no think time, 30 s timeouts, API restarted before every run, 60 s cooldown, build order alternating in pairs, 210 runs in total.
 - **Scenarios:** each endpoint on its own, plus a mixed scenario with a fixed ratio of 1 login request to 15 orders requests.
 - **Metrics:** response time (average, p95, p99), throughput, error rate, CPU and memory.
 - **Analysis:** one p95 per run, two-sided Mann-Whitney U per concurrency level at p < 0.05, with a 10% change as the practical threshold. See `RESULTS.md` and the pre-registered plan in `LAB_NOTEBOOK.md`.
+
+### Plan v2 (exploratory, 128 runs)
+
+- **Question:** does the executor size change the plan-v1 result? Sizes 16, 32 and 64 against the baseline, using the same jar with a configurable size.
+- **Scenarios and load:** login-only and mixed, at **100 and 200 users only**, 8 runs per condition, 2 batches of 64.
+- **Run parameters:** same as plan v1 (ramp-up, duration, trim, restart, cooldown). Build order rotates within blocks of four. It is not a random shuffle.
+- **Analysis:** Mann-Whitney U with Holm correction across the 3 sizes per scenario, level and endpoint, with a 10% practical threshold (`scripts/analyze_v2.py`).
+- **Caveat:** the analysis script was written after the plan was tagged and first run on batch 1 data, not on pilot data as the plan intended. The rules it applies are those written in plan v2.
+
+### Plan v3 (exploratory, 64 runs)
+
+- **Question:** can a smaller database connection pool improve `/login` p95 in the mixed scenario without hurting `/orders`? Pools 4, 6 and 8 against a rerun control of 10, on the baseline jar.
+- **Motivation:** an unregistered diagnosis (per-core CPU and thread dumps of the baseline during mixed runs) showed most request threads waiting for a pool connection. No claim rests on it.
+- **Scenario and load:** mixed only, 100 and 200 users, 8 runs per condition, 1 batch of 64.
+- **Thresholds, fixed before any run:** login p95 at least 10% better at 100 users and 15% better at 200 users. `/orders` p95 worse by less than 5% at 100 users and less than 10% at 200 users, judged by the upper bound of a 95% bootstrap confidence interval.
+- **Analysis:** `scripts/analyze_v3.py` (Mann-Whitney U with Holm correction across the 3 pool sizes, bootstrap with 10,000 resamples and seed 42). It was written after the batch data existed and applies only the rules written in plan v3.
+
+### Setup shared by all plans
+
+- **Machine:** the whole experiment runs on a single PC (see below). The API, MySQL, JMeter (command-line mode) and the monitoring script share it, so absolute numbers are specific to this setup. Compared builds use the identical setup, so the comparison between them stays valid.
+- **Scheduling and logging:** the driver (`scripts/driver.py`) runs each schedule (`scripts/schedule*.csv`), retries a failed attempt up to 3 times and moves failed attempts to a `failed/` folder.
 
 ## Test environment
 
@@ -161,11 +199,15 @@ curl http://localhost:8080/users/1/orders
 
 ## Known limitations
 
-- A single framework and a single intervention, tested on two representative endpoints.
+- A single framework and a single intervention family, tested on two representative endpoints.
+- Plans v2 and v3 are exploratory. Their results suggest directions and are not confirmatory evidence.
+- Plans v2 and v3 used only 100 and 200 users. Nothing is claimed for the executor sizes or pool sizes at lower concurrency. Only plan v1 covers 1, 10 and 50 users, and only for the 8-thread executor.
+- In plans v2 and v3, build order rotates within blocks and is not randomized.
+- The pool sweep covered sizes 4 to 10 only. Sizes above 10 and other request ratios were not tested, and executor sizes between 8 and 16 were not tested.
 - JVM heap and garbage collector settings are left at their defaults.
 - Each order has one product, with no cart or line items.
 - The orders endpoint does not check that the user exists.
-- The load generator, the database and the API share one machine, so they compete for CPU. Results compare the two architectures on this setup and are not absolute capacity figures.
+- The load generator, the database and the API share one machine, so they compete for CPU. Results compare the builds on this setup and are not absolute capacity figures.
 - `/orders` was designed as the I/O-bound endpoint, but on this machine the unindexed query ran as CPU work inside MySQL, so it is not I/O-bound here. See `RESULTS.md`.
 - Traffic goes over the loopback interface and the dataset is small enough to sit in memory, so the orders endpoint has very little real network or disk latency.
 - Virtual users send requests with no think time, so "200 users" means 200 constantly busy clients, which is much heavier than 200 real people.
@@ -175,14 +217,15 @@ curl http://localhost:8080/users/1/orders
 ## Repository layout
 
 ```
-config/                    benchmark settings shared by both builds
+analysis/                  per-run result tables (runs_v2.csv, runs_v3.csv, and the plan v1 table)
+config/                    benchmark settings shared by all builds
 db/                        dump and credentials file (fixed dataset)
 jmeter/                    JMeter test plans (.jmx)
-scripts/                   run driver, monitor, schedule, analysis scripts
+scripts/                   run driver, monitor, schedules (schedule*.csv), analysis scripts
 figures/                   result figures
 src/main/java/...          controllers, services, repositories, models, seeder
 src/main/resources/        application.properties.example
-LAB_NOTEBOOK.md            dated record of runs, decisions and the pre-registered plan
+LAB_NOTEBOOK.md            dated record of runs, decisions and the pre-registered plans
 RESULTS.md                 results and interpretation
 results/                   raw run output (git-ignored)
 artifacts/                 frozen jars (git-ignored, contain DB credentials)
