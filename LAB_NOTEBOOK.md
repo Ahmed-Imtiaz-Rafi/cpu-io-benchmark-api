@@ -314,3 +314,11 @@
 * **Exclusions and stopping:** same rules as plans v2 and v3. A failed attempt is moved to `failed/` and retried up to 3 times. No run is dropped after seeing results. No rule changes after the first run.
 * **Setup limits:** one machine, with JMeter, the API, MySQL and the monitor all on the same 16 logical processors. Results describe this co-located setup. The best size is reported as a ratio to logical processors as well as an absolute number.
 * **Pending:** `scripts/make_schedule_v4.py` and `scripts/schedule_v4.csv` | `scripts/analyze_v4.py` (the plan-v3 rules with sizes 12, 16, 24) | commit this entry, tag `plan-v4`, then record the tag in an amendment.
+
+### 2026-11-19: Amendment to Plan v4 (driver and schedule ready)
+
+* **Commits:** tag `plan-v4` is on `dcf3e7a`. Schedule and analysis script in `9acf49a`, after the tag. No plan rule is changed.
+* **Driver:** no change. Builds named `poolN` use the baseline jar and pass `--spring.datasource.hikari.maximum-pool-size=N` and `--spring.datasource.hikari.minimum-idle=N`, and `meta.json` records `hikari_pool_size`. Checked by reading `scripts/driver.py`: the size is taken from `build[4:]`, so `pool12`, `pool16` and `pool24` need no code change.
+* **Schedule:** `scripts/schedule_v4.csv`, 64 runs (pool 10, 12, 16 and 24; mixed; 100 and 200 users; 8 runs each). Build order rotates within each block of 4, the same method as plans v2 and v3. Generator: `scripts/make_schedule_v4.py` (the plan-v3 generator with the builds and output file changed). The control, `pool10`, is rerun inside this batch.
+* **Analysis:** `scripts/analyze_v4.py`, a copy of `scripts/analyze_v3.py` with `POOLS = ["pool12", "pool16", "pool24"]` and output `analysis/runs_v4.csv`. Every rule, threshold and the bootstrap setting is unchanged. It will be run on the results only after the batch is complete.
+* **Resolved from "Pending":** schedule generator, analysis script, tag. Not yet done: the batch itself (about 4 h, `results/final_v4/`).
