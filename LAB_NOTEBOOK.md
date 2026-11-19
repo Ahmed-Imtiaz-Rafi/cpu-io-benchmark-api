@@ -290,3 +290,27 @@
 * **Analysis:** `scripts/analyze_check.py`, a copy of `scripts/analyze_v2.py` that writes `analysis/runs_check.csv`, so `analysis/runs_v2.csv` is untouched. The "incomplete" lines for sizes 16, 32 and 64 are expected, because this folder holds only baseline runs.
 * **Result:** p95 per run 1,601 / 1,603 / 1,620 / 1,622 / 1,631 / 1,645 / 1,655 / 1,668 ms, median 1,626 ms, spread 4.1% of the median. Throughput 199/s, mean latency 998 ms.
 * **Reading (by the rules above):** median within 10% of 1,630, so the plan-v2 values reproduce and the plan-v1 values (1,062 ms) were the lower ones. The prediction held. The cause of the change after 25 October is not identified (same jar hash, same Java version). Comparisons stay within a plan.
+
+### 2026-11-18: Pre-registered Plan v4 (exploratory): database pool sizes above 10
+
+* **Status:** Written before any v4 run. Exploratory follow-up to `plan-v3`. It does not revise any earlier verdict. Edits only by dated amendments. Tag `plan-v4` before the first counted v4 run.
+* **Question:** in the mixed scenario, can a Hikari connection pool larger than the default of 10 improve `/login` p95 without hurting `/orders` p95?
+* **Motivation:** plan v3 tested pool sizes 4, 6 and 8 against 10, and login p95 rose as the pool shrank (pool 4: +24.7% and +27.7%), with lower throughput. That sweep did not test sizes above 10. The pilot compared pool 10 and 50 in the orders-only scenario with the baseline and found much worse `/orders` p95 at 50 (831 and 939 ms against 285 ms) with higher throughput. Both are motivation only.
+* **Reasoning behind the sizes (written before data):** MySQL keeps about 10 logical processors busy in the mixed scenario (about 960% CPU) and the machine has 16. A gain, if any, is expected between 10 and about 16. Beyond about 24 more connections should add contention and not throughput, so larger sizes are not tested.
+* **Build:** baseline jar only (`baseline-v2`, SHA-256 `c875668229e2c9419e607ccccac6edfc3736d506b9e9d4fbfb3d0263c8d26f08`). The only changed setting is `spring.datasource.hikari.maximum-pool-size`, passed as a launch argument, with `minimum-idle` set equal to it, as in plan v3. No code change.
+* **Conditions:** pool size 10 (control, rerun inside this batch, earlier controls are not reused), 12, 16 and 24. Scenario `mixed` (1 login : 15 orders), 100 and 200 users, 8 runs per condition, 64 runs in total. Order: blocks of (level, rep) with the 4 builds in rotated order, as in plan v3. Run length, ramp-up, trim, cooldown, quiet gate, restart per run, MySQL checks and the bad-run rule are unchanged.
+* **Primary comparison:** mixed `/login` p95, each larger pool against pool 10, at both levels.
+* **Thresholds (unchanged from plan v3, fixed before any run):**
+  * Login p95 must improve by at least 10% at 100 users and at least 15% at 200 users.
+  * `/orders` p95 must not be worse by 5% or more at 100 users, or by 10% or more at 200 users.
+* **Tests:** Mann-Whitney U on per-run p95, Holm correction across the 3 pool sizes per level and endpoint. Login needs adjusted p below 0.05. For orders, a size passes the safety condition only if the upper bound of the 95% bootstrap confidence interval for the median change stays below the limit (10,000 resamples, seed 42).
+* **Success:** a pool size succeeds only if all four conditions hold (login at both levels, orders at both levels). All succeeding sizes are reported. The headline is the succeeding size with the lowest login p95 at 200 users. If none succeeds, the result is "no pool size from 4 to 24 meets the aim on this machine" (combined with plan v3).
+* **Predictions (declared before data):**
+  * P1: if any size improves login p95, it is 12 or 16.
+  * P2: size 24 is not better than 12 or 16 for login p95.
+  * P3: `/orders` p95 at sizes 12 and 16 is not worse than pool 10 beyond the limits above.
+  * P4: throughput at every size is within 5% of pool 10 (no gain in capacity).
+  * P5: no size meets all four success conditions.
+* **Exclusions and stopping:** same rules as plans v2 and v3. A failed attempt is moved to `failed/` and retried up to 3 times. No run is dropped after seeing results. No rule changes after the first run.
+* **Setup limits:** one machine, with JMeter, the API, MySQL and the monitor all on the same 16 logical processors. Results describe this co-located setup. The best size is reported as a ratio to logical processors as well as an absolute number.
+* **Pending:** `scripts/make_schedule_v4.py` and `scripts/schedule_v4.csv` | `scripts/analyze_v4.py` (the plan-v3 rules with sizes 12, 16, 24) | commit this entry, tag `plan-v4`, then record the tag in an amendment.
